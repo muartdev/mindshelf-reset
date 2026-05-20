@@ -170,35 +170,29 @@
 
     async function initRecoverySession() {
       const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
+      const tokenHash = params.get("token_hash");
+      const type = params.get("type") || "recovery";
 
-      if (code) {
-        const { error } = await client.auth.exchangeCodeForSession(code);
-
-        if (error) {
-          showMessage("This reset link is invalid or expired. Please request a new password reset email from the MindShelf app.", "error");
-          button.disabled = true;
-          return;
-        }
-
-        recoveryReady = true;
-        message.className = "message";
-        message.textContent = "";
+      if (!tokenHash) {
+        showMessage("This reset link is missing or invalid. Please request a new password reset email from the MindShelf app.", "error");
+        button.disabled = true;
         return;
       }
 
-      setTimeout(async () => {
-        const { data } = await client.auth.getSession();
+      const { error } = await client.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type
+      });
 
-        if (data.session) {
-          recoveryReady = true;
-          message.className = "message";
-          message.textContent = "";
-        } else {
-          showMessage("This reset link is missing or expired. Please open the latest password reset email from MindShelf.", "error");
-          button.disabled = true;
-        }
-      }, 800);
+      if (error) {
+        showMessage("This reset link is invalid or expired. Please request a new password reset email from the MindShelf app.", "error");
+        button.disabled = true;
+        return;
+      }
+
+      recoveryReady = true;
+      message.className = "message";
+      message.textContent = "";
     }
 
     initRecoverySession();
@@ -223,13 +217,10 @@
       button.textContent = "Updating...";
 
       if (!recoveryReady) {
-        const { data } = await client.auth.getSession();
-        if (!data.session) {
-          showMessage("Your reset session is not ready. Please open the latest reset email again.", "error");
-          button.disabled = false;
-          button.textContent = "Update Password";
-          return;
-        }
+        showMessage("Your reset session is not ready. Please open the latest reset email again.", "error");
+        button.disabled = false;
+        button.textContent = "Update Password";
+        return;
       }
 
       const { error } = await client.auth.updateUser({
