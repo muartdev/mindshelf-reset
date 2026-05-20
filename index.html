@@ -171,7 +171,6 @@
     async function initRecoverySession() {
       const params = new URLSearchParams(window.location.search);
       const tokenHash = params.get("token_hash");
-      const type = params.get("type") || "recovery";
 
       if (!tokenHash) {
         showMessage("This reset link is missing or invalid. Please request a new password reset email from the MindShelf app.", "error");
@@ -181,7 +180,7 @@
 
       const { error } = await client.auth.verifyOtp({
         token_hash: tokenHash,
-        type: type
+        type: "recovery"
       });
 
       if (error) {
