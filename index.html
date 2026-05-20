@@ -144,12 +144,12 @@
   </div>
 
   <script>
-    const SUPABASE_URL = "https://hrukmualirlkapcdiso.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_zG2xqKXR4MzuhrbDrIXRVQ_eArOfDin...";
+    const SUPABASE_URL = "https://bhrukmualirlkapcdiso.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_zG2xqKXR4MzuhrbDrIXRVQ_eArOfDin";
 
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
-        detectSessionInUrl: false,
+        detectSessionInUrl: true,
         persistSession: true,
         autoRefreshToken: true
       }
@@ -162,39 +162,96 @@
     const message = document.getElementById("message");
 
     let recoveryReady = false;
+    button.disabled = true;
+    button.textContent = "Checking reset link...";
 
     function showMessage(text, type) {
       message.textContent = text;
       message.className = "message " + type;
     }
 
-    async function initRecoverySession() {
-      const params = new URLSearchParams(window.location.search);
-      const tokenHash = params.get("token_hash");
-
-      if (!tokenHash) {
-        showMessage("This reset link is missing or invalid. Please request a new password reset email from the MindShelf app.", "error");
-        button.disabled = true;
-        return;
-      }
-
-      const { error } = await client.auth.verifyOtp({
-        token_hash: tokenHash,
-        type: "recovery"
-      });
-
-      if (error) {
-        showMessage("This reset link is invalid or expired. Please request a new password reset email from the MindShelf app.", "error");
-        button.disabled = true;
-        return;
-      }
-
-      recoveryReady = true;
-      message.className = "message";
-      message.textContent = "";
+    function resetButton() {
+      button.disabled = false;
+      button.textContent = "Update Password";
     }
 
-    initRecoverySession();
+    function disableWithError(text) {
+      showMessage(text, "error");
+      button.disabled = true;
+      button.textContent = "Update Password";
+    }
+
+    async function initRecoverySession() {
+      const params = new URLSearchParams(window.location.search);
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const errorDescription = params.get("error_description") || hash.get("error_description");
+      const accessToken = hash.get("access_token") || params.get("access_token");
+      const refreshToken = hash.get("refresh_token") || params.get("refresh_token");
+      const tokenHash = params.get("token_hash") || hash.get("token_hash");
+      const code = params.get("code") || hash.get("code");
+
+      if (errorDescription) {
+        disableWithError(errorDescription);
+        return;
+      }
+
+      if (accessToken && refreshToken) {
+        const { error } = await client.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+
+        if (error) {
+          disableWithError("This reset link is invalid or expired. Please request a new password reset email from the MindShelf app.");
+          return;
+        }
+
+        recoveryReady = true;
+        message.className = "message";
+        message.textContent = "";
+        resetButton();
+        return;
+      }
+
+      if (tokenHash) {
+        const { error } = await client.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "recovery"
+        });
+
+        if (error) {
+          disableWithError("This reset link is invalid or expired. Please request a new password reset email from the MindShelf app.");
+          return;
+        }
+
+        recoveryReady = true;
+        message.className = "message";
+        message.textContent = "";
+        resetButton();
+        return;
+      }
+
+      if (code) {
+        const { error } = await client.auth.exchangeCodeForSession(code);
+
+        if (error) {
+          disableWithError("This reset link is invalid or expired. Please request a new password reset email from the MindShelf app.");
+          return;
+        }
+
+        recoveryReady = true;
+        message.className = "message";
+        message.textContent = "";
+        resetButton();
+        return;
+      }
+
+      disableWithError("This reset link is missing or invalid. Please request a new password reset email from the MindShelf app.");
+    }
+
+    initRecoverySession().catch(function () {
+      disableWithError("Could not prepare this reset link. Please request a new password reset email from the MindShelf app.");
+    });
 
     form.addEventListener("submit", async function (event) {
       event.preventDefault();
